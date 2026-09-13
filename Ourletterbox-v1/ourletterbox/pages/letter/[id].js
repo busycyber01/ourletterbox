@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { decryptLetter } from '../../lib/crypto';
+import { decryptLetter, encryptLetter } from '../../lib/crypto';
 
 export default function LetterPage() {
   const router = useRouter();
@@ -11,6 +11,13 @@ export default function LetterPage() {
   const [letterText, setLetterText] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [showReplyForm, setShowReplyForm] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replyPassphrase, setReplyPassphrase] = useState('');
+  const [replyLink, setReplyLink] = useState('');
+  const [replyLoading, setReplyLoading] = useState(false);
+  const [replyError, setReplyError] = useState('');
 
   async function breakSeal() {
     setStage('passphrase');
@@ -46,6 +53,40 @@ export default function LetterPage() {
       setError('Wrong passphrase, or the letter is corrupted.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSendReply(e) {
+    e.preventDefault();
+    setReplyError('');
+
+    if (!replyText.trim() || !replyPassphrase.trim()) {
+      setReplyError('Write something and set a passphrase first.');
+      return;
+    }
+
+    setReplyLoading(true);
+    try {
+      const encrypted = await encryptLetter(replyText, replyPassphrase);
+
+      const res = await fetch('/api/letters/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...encrypted,
+          burnAfterReading: true,
+          replyTo: id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+
+      setReplyLink(`${window.location.origin}/letter/${data.id}`);
+    } catch (err) {
+      setReplyError(err.message);
+    } finally {
+      setReplyLoading(false);
     }
   }
 
@@ -85,6 +126,44 @@ export default function LetterPage() {
     <div className="paper">
       <h1>Your letter</h1>
       <div className="letter-body">{letterText}</div>
+
+      {!showReplyForm && !replyLink && (
+        <button style={{ marginTop: 28 }} onClick={() => setShowReplyForm(true)}>
+          Write a reply
+        </button>
+      )}
+
+      {showReplyForm && !replyLink && (
+        <form onSubmit={handleSendReply} style={{ marginTop: 28 }}>
+          <label>Your reply</label>
+          <textarea
+            placeholder="Dear..."
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+          />
+          <label style={{ marginTop: 16 }}>Passphrase (share this separately)</label>
+          <input
+            type="password"
+            placeholder="Something only they'd know"
+            value={replyPassphrase}
+            onChange={(e) => setReplyPassphrase(e.target.value)}
+          />
+          {replyError && <p className="error-text">{replyError}</p>}
+          <button type="submit" disabled={replyLoading}>
+            {replyLoading ? 'Sealing...' : 'Seal the reply'}
+          </button>
+        </form>
+      )}
+
+      {replyLink && (
+        <div style={{ marginTop: 28 }}>
+          <p className="subtitle">Your reply is sealed.</p>
+          <div className="link-box">{replyLink}</div>
+          <p className="muted" style={{ marginTop: 16 }}>
+            Send this link back to them, and share the passphrase separately.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
