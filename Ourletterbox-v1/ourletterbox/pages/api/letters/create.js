@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { ciphertext, salt, iv, unlockAt, burnAfterReading } = req.body;
+  const { ciphertext, salt, iv, unlockAt, burnAfterReading, replyTo } = req.body;
 
   if (!ciphertext || !salt || !iv) {
     return res.status(400).json({ error: 'Missing encrypted letter data' });
@@ -19,6 +19,7 @@ export default async function handler(req, res) {
       iv,
       unlock_at: unlockAt || null,
       burn_after_reading: !!burnAfterReading,
+      reply_to: replyTo || null,
     })
     .select('id')
     .single();
